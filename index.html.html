@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="ml">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Hub</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM CDN -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-slate-100">
+    <div id="root"></div>
+
+    <!-- Firebase SDKs (Compat version for easier single-file usage) -->
+    <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore-compat.js"></script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // Inline SVG Icons to ensure zero external dependency errors
+        const Icons = {
+            Layout: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>,
+            Settings: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>,
+            X: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>,
+            PlusCircle: () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>,
+            Trash2: () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>,
+            Lock: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
+            Loader2: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.21-8.58"/></svg>,
+            Send: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>,
+            CheckCircle2: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>,
+            PartyPopper: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5.8 11.3 2 22l10.7-3.8Z"/><path d="M4 3h.01"/><path d="M9 2h.01"/><path d="M15 2h.01"/><path d="M4 8h.01"/><path d="M9 6h.01"/><path d="M15 5h.01"/><path d="M18 3.3 16.5 5"/><path d="m22 8-3 1"/><path d="m20 13-2-1.5"/><path d="m14 18 1-3"/><path d="m8 22-1-3"/><path d="m11 14 3 2"/></svg>
+        };
+
+        // User Provided Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBGDe6FGoBFSWAqLRkvUNfZD6M92PybNro",
+            authDomain: "watsupnumber-sendingadsfamous.firebaseapp.com",
+            projectId: "watsupnumber-sendingadsfamous",
+            storageBucket: "watsupnumber-sendingadsfamous.firebasestorage.app",
+            messagingSenderId: "608833963646",
+            appId: "1:608833963646:web:25f3f2e6f4410f611f3a2f",
+            measurementId: "G-GF91PJ4REB"
+        };
+
+        // Initialize Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+        const appId = "wa-distributor-app-v2";
+
+        const SECRET_MARKETING_CODES = [
+            "MYST782X", "WIN99GOP", "LUCK450Q", "FAST712K", "GOLD888V", "ZAPP321M", "BOOM444R", "DASH901T", 
+            "FREE112Z", "NEXT555B", "GIFT880S", "WOW3321Y", "MAGIC500", "COOL222P", "SUPER77G", "TOP999KK", 
+            "CASH505J", "SNAP404L", "FLIP101W", "STAR777C", "BOSS111N", "JET999AA", "XTRA882D", "BOLD333E", 
+            "WAVE771F", "ROCK440G", "CLUB221H", "VIBE662I", "KING007K", "ACE555MM", "NEO404XY", "ZIG888ZA", 
+            "UP999WIN", "GO112GET", "FLY778PP", "HOT221SS", "YES990OK", "PLUS333X", "MEGA444V", "PRO101ZZ", 
+            "MAX777YY", "LINK882B", "CLICK55S", "BINGO999", "JUMP111W", "SWIFT44K", "ULTRA22X", "PRIME777", 
+            "HUGE990L", "OPEN2026"
+        ];
+
+        function App() {
+            const [user, setUser] = useState(null);
+            const [isAdmin, setIsAdmin] = useState(false);
+            const [isStaffAuthenticated, setIsStaffAuthenticated] = useState(false);
+            const [showAdminLogin, setShowAdminLogin] = useState(false);
+            const [adminPassword, setAdminPassword] = useState('');
+            const [staffCodeInput, setStaffCodeInput] = useState('');
+            const [userName, setUserName] = useState('');
+            const [allContacts, setAllContacts] = useState([]);
+            const [assignedNumbers, setAssignedNumbers] = useState([]);
+            const [sentIds, setSentIds] = useState(new Set()); 
+            const [message, setMessage] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [uploadStatus, setUploadStatus] = useState({ message: '', type: '' });
+            const [sheetUrl, setSheetUrl] = useState('');
+            const [manualPaste, setManualPaste] = useState('');
+            const [adminTab, setAdminTab] = useState('paste'); 
+
+            const ADMIN_CODE = "ADS@2026";
+
+            useEffect(() => {
+                const unsubscribe = auth.onAuthStateChanged((currUser) => {
+                    if (!currUser) {
+                        auth.signInAnonymously().catch(err => console.error("Auth Error", err));
+                    }
+                    setUser(currUser);
+                });
+                return () => unsubscribe();
+            }, []);
+
+            useEffect(() => {
+                if (!user) return;
+                const contactsRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('contacts');
+                const unsubscribe = contactsRef.onSnapshot((snapshot) => {
+                    setAllContacts(snapshot.docs.map(d => d.data()));
+                }, (error) => console.error("Listen error:", error));
+                return () => unsubscribe();
+            }, [user]);
+
+            const stats = useMemo(() => ({
+                total: allContacts.length,
+                assigned: allContacts.filter(c => c.assigned).length,
+                remaining: allContacts.length - allContacts.filter(c => c.assigned).length
+            }), [allContacts]);
+
+            const handleAdminAccess = () => {
+                if (adminPassword.trim().toUpperCase() === ADMIN_CODE) {
+                    setIsAdmin(true);
+                    setShowAdminLogin(false);
+                    setAdminPassword('');
+                } else { alert("തെറ്റായ പാസ്‌വേഡ്!"); }
+            };
+
+            const handleStaffAuth = () => {
+                const input = staffCodeInput.trim().toUpperCase();
+                if (SECRET_MARKETING_CODES.includes(input) || input === ADMIN_CODE) {
+                    setIsStaffAuthenticated(true);
+                    setStaffCodeInput('');
+                } else {
+                    alert("അസാധുവായ രഹസ്യ കോഡ്!");
+                }
+            };
+
+            const parseAndSaveData = async (text, isManual = false) => {
+                const rows = text.split(/\r?\n/).map(r => r.trim()).filter(r => r !== '');
+                if (rows.length === 0) throw new Error("ഡാറ്റയൊന്നുമില്ല.");
+                const dataRows = isManual ? rows : rows.slice(1);
+                let count = 0;
+                let batch = db.batch();
+
+                for (let row of dataRows) {
+                    let columns = row.includes(';') ? row.split(';') : row.split(',');
+                    if (columns.length < 2 && row.includes('\t')) columns = row.split('\t');
+                    columns = columns.map(c => c.trim().replace(/^["']|["']$/g, ''));
+                    let contactName = columns[0] || "No Name";
+                    let phone = columns.length >= 2 ? columns[1].replace(/\D/g, '') : columns[0].replace(/\D/g, '');
+                    
+                    if (phone) {
+                        if (phone.length === 10) phone = '91' + phone;
+                        const contactId = `id_${Date.now()}_${count}`;
+                        const docRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('contacts').doc(contactId);
+                        batch.set(docRef, {
+                            id: contactId, name: contactName, phone, assigned: false, assignedTo: '', timestamp: Date.now() + count
+                        });
+                        count++;
+                        if (count % 450 === 0) {
+                            await batch.commit();
+                            batch = db.batch();
+                        }
+                    }
+                }
+                await batch.commit();
+                return count;
+            };
+
+            const handleFileUpload = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setLoading(true);
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const count = await parseAndSaveData(event.target.result, false);
+                        setUploadStatus({ message: `${count} നമ്പറുകൾ ചേർത്തു!`, type: 'success' });
+                    } catch (error) { setUploadStatus({ message: error.message, type: 'error' }); }
+                    finally { setLoading(false); }
+                };
+                reader.readAsText(file);
+            };
+
+            const handleManualUpload = async () => {
+                setLoading(true);
+                try {
+                    const count = await parseAndSaveData(manualPaste, true);
+                    setUploadStatus({ message: `${count} നമ്പറുകൾ ചേർത്തു!`, type: 'success' });
+                    setManualPaste('');
+                } catch (error) { setUploadStatus({ message: error.message, type: 'error' }); }
+                finally { setLoading(false); }
+            };
+
+            const handleSheetFetch = async () => {
+                setLoading(true);
+                try {
+                    const sheetIdMatch = sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+                    if (!sheetIdMatch) throw new Error("Invalid Link");
+                    const response = await fetch(`https://docs.google.com/spreadsheets/d/${sheetIdMatch[1]}/export?format=csv`);
+                    const count = await parseAndSaveData(await response.text(), false);
+                    setUploadStatus({ message: `${count} നമ്പറുകൾ ഷീറ്റിൽ നിന്നും ചേർത്തു!`, type: 'success' });
+                    setSheetUrl('');
+                } catch (error) { setUploadStatus({ message: error.message, type: 'error' }); }
+                finally { setLoading(false); }
+            };
+
+            const resetData = async () => {
+                const confirmText = prompt("എല്ലാ ഡാറ്റയും മാറ്റാൻ 'CONFIRM' എന്ന് ടൈപ്പ് ചെയ്യുക:");
+                if (confirmText !== 'CONFIRM') return;
+                setLoading(true);
+                try {
+                    const snapshot = await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('contacts').get();
+                    let batch = db.batch();
+                    let count = 0;
+                    snapshot.forEach((d) => {
+                        batch.delete(d.ref);
+                        count++;
+                        if (count % 450 === 0) {
+                            batch.commit();
+                            batch = db.batch();
+                        }
+                    });
+                    await batch.commit();
+                    setUploadStatus({ message: 'പഴയ നമ്പറുകൾ എല്ലാം നീക്കം ചെയ്തു.', type: 'info' });
+                } catch (e) { console.error(e); }
+                finally { setLoading(false); }
+            };
+
+            const getNumbers = async () => {
+                if (!userName.trim()) { alert("പേര് നൽകുക."); return; }
+                setLoading(true);
+                const available = allContacts.filter(c => !c.assigned).sort((a, b) => a.timestamp - b.timestamp).slice(0, 29);
+                if (available.length === 0) { alert("പുതിയ നമ്പറുകൾ ലഭ്യമല്ല!"); setLoading(false); return; }
+                
+                const batch = db.batch();
+                available.forEach(item => {
+                    const docRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('contacts').doc(item.id);
+                    batch.update(docRef, {
+                        assigned: true, assignedTo: userName, assignedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                });
+                await batch.commit();
+                setAssignedNumbers(available);
+                setSentIds(new Set()); 
+                setLoading(false);
+            };
+
+            const handleSendMessage = (item) => {
+                if (!message.trim()) { alert("മെസ്സേജ് എഴുതുക"); return; }
+                window.open(`https://wa.me/${item.phone}?text=${encodeURIComponent(message)}`, '_blank');
+                const newSentIds = new Set(sentIds);
+                newSentIds.add(item.id);
+                setSentIds(newSentIds);
+            };
+
+            const isBatchComplete = assignedNumbers.length > 0 && sentIds.size === assignedNumbers.length;
+
+            return (
+                <div className="min-h-screen p-3 md:p-6 text-slate-900">
+                    <div className="max-w-xl mx-auto space-y-4">
+                        
+                        {/* Header Section */}
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div className="bg-slate-900 px-5 py-4 text-white flex justify-between items-center">
+                                <div>
+                                    <h1 className="text-lg font-bold flex items-center gap-2 tracking-tight">
+                                        <Icons.Layout /> WhatsApp Hub
+                                    </h1>
+                                </div>
+                                {!isAdmin ? (
+                                    <button onClick={() => setShowAdminLogin(true)} className="p-2 hover:bg-white/10 rounded-lg transition">
+                                        <Icons.Settings />
+                                    </button>
+                                ) : (
+                                    <button onClick={() => setIsAdmin(false)} className="text-[10px] font-bold uppercase bg-red-500 px-3 py-1.5 rounded-md">Logout</button>
+                                )}
+                            </div>
+                            
+                            <div className="flex divide-x divide-slate-100">
+                                <div className="flex-1 py-3 text-center">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Total (ആകെ)</span>
+                                    <span className="block text-xl font-black">{stats.total}</span>
+                                </div>
+                                <div className="flex-1 py-3 text-center">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Used (നൽകിയവ)</span>
+                                    <span className="block text-xl font-black text-green-600">{stats.assigned}</span>
+                                </div>
+                                <div className="flex-1 py-3 text-center">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Left (ബാക്കി)</span>
+                                    <span className="block text-xl font-black text-orange-500">{stats.remaining}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Admin Login Modal */}
+                        {showAdminLogin && !isAdmin && (
+                            <div className="bg-white p-4 rounded-2xl shadow-xl border border-slate-200 animate-in zoom-in-95">
+                                <div className="flex justify-between items-center mb-3">
+                                    <h2 className="text-xs font-black uppercase tracking-widest text-slate-500 tracking-tighter">Admin Login</h2>
+                                    <button onClick={() => setShowAdminLogin(false)}><Icons.X /></button>
+                                </div>
+                                <div className="flex gap-2">
+                                    <input type="password" value={adminPassword} onChange={(e)=>setAdminPassword(e.target.value)} placeholder="Code..." className="flex-1 p-2 bg-slate-50 rounded-xl outline-none border focus:border-green-500" />
+                                    <button onClick={handleAdminAccess} className="bg-slate-900 text-white px-4 rounded-xl text-sm font-bold">Enter</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Admin Tools */}
+                        {isAdmin && (
+                            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                                <div className="bg-slate-50 px-4 py-2 border-b flex items-center gap-2">
+                                    <Icons.PlusCircle />
+                                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-600 tracking-tighter">പുതിയ നമ്പറുകൾ ചേർക്കുക</span>
+                                </div>
+                                <div className="flex border-b text-[11px] font-bold uppercase tracking-wider text-slate-500 overflow-x-auto whitespace-nowrap scrollbar-hide">
+                                    <button onClick={()=>setAdminTab('paste')} className={`flex-1 py-3 px-4 ${adminTab==='paste'?'bg-slate-50 text-slate-900 border-b-2 border-slate-900':''}`}>Paste</button>
+                                    <button onClick={()=>setAdminTab('sheet')} className={`flex-1 py-3 px-4 ${adminTab==='sheet'?'bg-slate-50 text-slate-900 border-b-2 border-slate-900':''}`}>Sheet</button>
+                                    <button onClick={()=>setAdminTab('csv')} className={`flex-1 py-3 px-4 ${adminTab==='csv'?'bg-slate-50 text-slate-900 border-b-2 border-slate-900':''}`}>CSV</button>
+                                    <button onClick={()=>setAdminTab('codes')} className={`flex-1 py-3 px-4 ${adminTab==='codes'?'bg-slate-50 text-slate-900 border-b-2 border-slate-900':''}`}>Codes</button>
+                                    <button onClick={resetData} className="p-3 text-red-500 border-l hover:bg-red-50"><Icons.Trash2 /></button>
+                                </div>
+                                <div className="p-4 bg-slate-50/30">
+                                    {adminTab === 'paste' && (
+                                        <div className="space-y-3">
+                                            <textarea value={manualPaste} onChange={(e)=>setManualPaste(e.target.value)} placeholder="Name, Number..." className="w-full p-3 bg-white border rounded-xl text-sm h-24 outline-none focus:ring-1 focus:ring-slate-900" />
+                                            <button onClick={handleManualUpload} disabled={loading} className="w-full bg-slate-900 text-white py-2.5 rounded-xl font-bold text-sm">Add to List</button>
+                                        </div>
+                                    )}
+                                    {adminTab === 'sheet' && (
+                                        <div className="flex gap-2">
+                                            <input type="text" value={sheetUrl} onChange={(e)=>setSheetUrl(e.target.value)} placeholder="Public Sheet Link" className="flex-1 p-2.5 bg-white border rounded-xl text-sm outline-none" />
+                                            <button onClick={handleSheetFetch} className="bg-green-600 text-white px-4 rounded-xl font-bold text-sm">Fetch</button>
+                                        </div>
+                                    )}
+                                    {adminTab === 'csv' && (
+                                        <input type="file" accept=".csv" onChange={handleFileUpload} className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-slate-200 file:font-bold" />
+                                    )}
+                                    {adminTab === 'codes' && (
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-60 overflow-y-auto p-1">
+                                            {SECRET_MARKETING_CODES.map((code, idx) => (
+                                                <div key={idx} className="bg-white border p-2 rounded-lg text-[10px] font-mono font-bold text-slate-600 flex items-center justify-between">
+                                                    <span className="text-slate-300">{idx+1}.</span> {code}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {uploadStatus.message && <p className={`mt-2 text-[11px] font-bold uppercase ${uploadStatus.type==='error'?'text-red-500':'text-green-600'}`}>{uploadStatus.message}</p>}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Staff Section */}
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                            {!isStaffAuthenticated ? (
+                                <div className="space-y-3 text-center py-2 animate-in fade-in duration-500">
+                                    <div className="bg-slate-50 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-1">
+                                        <Icons.Lock />
+                                    </div>
+                                    <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest block tracking-tighter tracking-tighter">രഹസ്യ കോഡ് നൽകുക</label>
+                                    <div className="flex gap-2">
+                                        <input type="text" value={staffCodeInput} onChange={(e)=>setStaffCodeInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleStaffAuth()} placeholder="Code..." className="flex-1 p-3 bg-slate-50 border rounded-xl outline-none focus:border-green-500 text-base font-bold tracking-widest uppercase text-center" />
+                                        <button onClick={handleStaffAuth} className="bg-slate-900 text-white px-6 rounded-xl font-bold shadow-lg">Enter</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-4 animate-in slide-in-from-right duration-500">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1 tracking-tighter">നിങ്ങളുടെ പേര് നൽകുക</label>
+                                        <button onClick={()=>setIsStaffAuthenticated(false)} className="text-[9px] font-bold uppercase text-slate-400 border px-2 py-0.5 rounded">Change Code</button>
+                                    </div>
+                                    <input type="text" value={userName} onChange={(e)=>setUserName(e.target.value)} placeholder="Staff Name..." className="w-full p-3.5 bg-slate-50 border rounded-xl outline-none focus:border-green-500 text-base font-semibold" />
+                                    <button onClick={getNumbers} disabled={loading || (assignedNumbers.length > 0 && !isBatchComplete)} className="w-full bg-green-600 text-white font-black py-4 rounded-xl shadow-lg shadow-green-200 active:scale-[0.98] transition disabled:opacity-30 text-base flex items-center justify-center gap-2 tracking-tighter">
+                                        {loading ? <Icons.Loader2 /> : <>ഗിവ് മി നമ്പർ <span className="text-green-200">(29)</span></>}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Batch Complete Card */}
+                        {isBatchComplete && (
+                            <div className="bg-green-50 border border-green-200 p-6 rounded-2xl text-center space-y-2 animate-in zoom-in duration-300">
+                                <div className="bg-green-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-2">
+                                    <Icons.PartyPopper />
+                                </div>
+                                <h2 className="text-xl font-black text-green-800 tracking-tight tracking-tighter">{userName},</h2>
+                                <p className="text-green-700 font-bold tracking-tighter">നിങ്ങളുടെ ജോലി നന്നായി ചെയ്തു, നന്ദി!</p>
+                            </div>
+                        )}
+
+                        {/* Progress and List */}
+                        {assignedNumbers.length > 0 && (
+                            <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2">
+                                <div className="bg-white p-4 rounded-2xl border-2 border-green-100 shadow-sm shadow-green-50">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest tracking-tighter">Message Text</span>
+                                        <div className="h-1.5 w-24 bg-slate-100 rounded-full overflow-hidden">
+                                            <div className="h-full bg-green-500 transition-all duration-500" style={{ width: `${(sentIds.size / assignedNumbers.length) * 100}%` }} />
+                                        </div>
+                                    </div>
+                                    <textarea maxLength={200} value={message} onChange={(e)=>setMessage(e.target.value)} placeholder="മെസ്സേജ് ഇവിടെ ടൈപ്പ് ചെയ്യുക..." className="w-full p-3 bg-slate-50 rounded-xl outline-none h-24 text-sm font-medium resize-none border-none focus:ring-1 focus:ring-green-100" />
+                                    <div className="flex justify-between items-center mt-2">
+                                        <span className="text-[10px] font-black uppercase text-green-600 flex items-center gap-1 tracking-tighter">
+                                            {sentIds.size === assignedNumbers.length ? <><Icons.CheckCircle2 /> Task Done</> : `Progress: ${sentIds.size}/${assignedNumbers.length}`}
+                                        </span>
+                                        <span className="text-[10px] font-mono text-slate-400">{message.length}/200</span>
+                                    </div>
+                                </div>
+
+                                <div className="grid gap-2 pb-10">
+                                    {assignedNumbers.map((item, idx) => {
+                                        const isSent = sentIds.has(item.id);
+                                        return (
+                                            <div key={item.id} className={`bg-white px-4 py-3 rounded-xl border transition-all duration-300 flex items-center justify-between group ${isSent ? 'border-green-200 bg-green-50/20 opacity-90' : 'border-slate-200'}`}>
+                                                <div className="flex items-center gap-3">
+                                                    <span className={`text-[10px] font-bold w-4 ${isSent ? 'text-green-400' : 'text-slate-300'}`}>
+                                                        {isSent ? <Icons.CheckCircle2 /> : idx+1}
+                                                    </span>
+                                                    <div>
+                                                        <h4 className="text-[11px] font-bold text-slate-500 leading-none mb-1 tracking-tighter uppercase">{item.name}</h4>
+                                                        <p className={`text-base font-black tracking-wider leading-none ${isSent ? 'text-green-700' : 'text-slate-900'}`}>{item.phone}</p>
+                                                    </div>
+                                                </div>
+                                                <button 
+                                                    onClick={() => handleSendMessage(item)} 
+                                                    className={`${isSent ? 'bg-green-600' : 'bg-yellow-500 shadow-sm hover:scale-105 active:bg-yellow-600'} text-white p-2.5 rounded-lg active:scale-95 transition`}
+                                                >
+                                                    <Icons.Send />
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
